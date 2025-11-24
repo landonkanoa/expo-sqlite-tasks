@@ -8,6 +8,7 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
+  Modal,
   Alert,
 } from "react-native";
 import { useSQLiteContext } from "expo-sqlite";
@@ -24,6 +25,14 @@ export default function ExpenseScreen() {
   const [filter, setFilter] = useState("all"); // "all", "week", "month"
   const [totalSpending, setTotalSpending] = useState(0);
   const [categoryTotals, setCategoryTotals] = useState({});
+
+  // Edit modal states
+  const [editModalVisible, setEditModalVisible] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editCategory, setEditCategory] = useState("");
+  const [editNote, setEditNote] = useState("");
+  const [editDate, setEditDate] = useState("");
 
   // Get today's date in ISO format
   const getTodayDate = () => {
@@ -138,8 +147,55 @@ export default function ExpenseScreen() {
     }
   };
 
+  const openEditModal = (expense) => {
+    setEditingExpense(expense);
+    setEditAmount(expense.amount.toString());
+    setEditCategory(expense.category);
+    setEditNote(expense.note || "");
+    setEditDate(expense.date);
+    setEditModalVisible(true);
+  };
+
+  const saveEdit = async () => {
+    const amountNumber = parseFloat(editAmount);
+
+    if (isNaN(amountNumber) || amountNumber <= 0) {
+      Alert.alert("Invalid Amount", "Please enter a valid positive amount");
+      return;
+    }
+
+    const trimmedCategory = editCategory.trim();
+    if (!trimmedCategory) {
+      Alert.alert("Category Required", "Please enter a category");
+      return;
+    }
+
+    try {
+      await db.runAsync(
+        "UPDATE expenses SET amount = ?, category = ?, note = ?, date = ? WHERE id = ?;",
+        [
+          amountNumber,
+          trimmedCategory,
+          editNote.trim() || null,
+          editDate,
+          editingExpense.id,
+        ]
+      );
+
+      setEditModalVisible(false);
+      setEditingExpense(null);
+      loadExpenses();
+    } catch (error) {
+      console.error("Error updating expense:", error);
+      Alert.alert("Error", "Failed to update expense");
+    }
+  };
+
   const renderExpense = ({ item }) => (
-    <View style={styles.expenseRow}>
+    <TouchableOpacity
+      style={styles.expenseRow}
+      onPress={() => openEditModal(item)}
+    >
       <View style={{ flex: 1 }}>
         <Text style={styles.expenseAmount}>
           ${Number(item.amount).toFixed(2)}
@@ -149,10 +205,16 @@ export default function ExpenseScreen() {
         <Text style={styles.expenseDate}>{item.date}</Text>
       </View>
 
-      <TouchableOpacity onPress={() => deleteExpense(item.id)}>
+      <TouchableOpacity
+        onPress={(e) => {
+          e.stopPropagation();
+          deleteExpense(item.id);
+        }}
+        style={styles.deleteButton}
+      >
         <Text style={styles.delete}>✕</Text>
       </TouchableOpacity>
-    </View>
+    </TouchableOpacity>
   );
 
   useEffect(() => {
@@ -354,8 +416,67 @@ export default function ExpenseScreen() {
         }
       />
 
+      {/* Edit Modal */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={editModalVisible}
+        onRequestClose={() => setEditModalVisible(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Edit Expense</Text>
+
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Amount"
+              placeholderTextColor="#9ca3af"
+              keyboardType="numeric"
+              value={editAmount}
+              onChangeText={setEditAmount}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Category"
+              placeholderTextColor="#9ca3af"
+              value={editCategory}
+              onChangeText={setEditCategory}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Note"
+              placeholderTextColor="#9ca3af"
+              value={editNote}
+              onChangeText={setEditNote}
+            />
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Date (YYYY-MM-DD)"
+              placeholderTextColor="#9ca3af"
+              value={editDate}
+              onChangeText={setEditDate}
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setEditModalVisible(false)}
+              >
+                <Text style={styles.buttonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.saveButton]}
+                onPress={saveEdit}
+              >
+                <Text style={styles.buttonText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Text style={styles.footer}>
-        Enter your expenses and they'll be saved locally with SQLite.
+        Tap an expense to edit • Data saved locally with SQLite
       </Text>
     </SafeAreaView>
   );
@@ -471,6 +592,9 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginTop: 4,
   },
+  deleteButton: {
+    padding: 4,
+  },
   delete: {
     color: "#f87171",
     fontSize: 20,
@@ -486,5 +610,58 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginTop: 12,
     fontSize: 12,
+  },
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+  },
+  modalContent: {
+    backgroundColor: "#1f2937",
+    borderRadius: 12,
+    padding: 20,
+    width: "90%",
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#fff",
+    marginBottom: 16,
+    textAlign: "center",
+  },
+  modalInput: {
+    padding: 10,
+    backgroundColor: "#111827",
+    color: "#fff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#374151",
+    marginBottom: 12,
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  cancelButton: {
+    backgroundColor: "#6b7280",
+  },
+  saveButton: {
+    backgroundColor: "#3b82f6",
+  },
+  buttonText: {
+    color: "#fff",
+    fontWeight: "600",
   },
 });
