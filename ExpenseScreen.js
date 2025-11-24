@@ -22,6 +22,8 @@ export default function ExpenseScreen() {
   const [note, setNote] = useState("");
   const [date, setDate] = useState("");
   const [filter, setFilter] = useState("all"); // "all", "week", "month"
+  const [totalSpending, setTotalSpending] = useState(0);
+  const [categoryTotals, setCategoryTotals] = useState({});
 
   // Get today's date in ISO format
   const getTodayDate = () => {
@@ -70,6 +72,23 @@ export default function ExpenseScreen() {
     }
 
     setFilteredExpenses(filtered);
+    calculateTotals(filtered);
+  };
+
+  const calculateTotals = (expenseList) => {
+    // Calculate overall total
+    const total = expenseList.reduce((sum, expense) => sum + expense.amount, 0);
+    setTotalSpending(total);
+
+    // Calculate totals by category
+    const categoryMap = {};
+    expenseList.forEach((expense) => {
+      if (!categoryMap[expense.category]) {
+        categoryMap[expense.category] = 0;
+      }
+      categoryMap[expense.category] += expense.amount;
+    });
+    setCategoryTotals(categoryMap);
   };
 
   const addExpense = async () => {
@@ -250,6 +269,39 @@ export default function ExpenseScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Totals Display */}
+      <View style={styles.totalsContainer}>
+        <Text style={styles.totalLabel}>
+          Total Spending (
+          {filter === "week"
+            ? "This Week"
+            : filter === "month"
+            ? "This Month"
+            : "All"}
+          ):
+        </Text>
+        <Text style={styles.totalAmount}>${totalSpending.toFixed(2)}</Text>
+
+        {Object.keys(categoryTotals).length > 0 && (
+          <View style={styles.categoryBreakdown}>
+            <Text style={styles.categoryTitle}>
+              By Category (
+              {filter === "week"
+                ? "This Week"
+                : filter === "month"
+                ? "This Month"
+                : "All"}
+              ):
+            </Text>
+            {Object.entries(categoryTotals).map(([cat, total]) => (
+              <Text key={cat} style={styles.categoryItem}>
+                {cat}: ${total.toFixed(2)}
+              </Text>
+            ))}
+          </View>
+        )}
+      </View>
+
       {/* Add Expense Form */}
       <View style={styles.form}>
         <TextInput
@@ -345,6 +397,41 @@ const styles = StyleSheet.create({
   },
   filterTextActive: {
     color: "#fff",
+  },
+  totalsContainer: {
+    backgroundColor: "#1f2937",
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+  totalLabel: {
+    color: "#9ca3af",
+    fontSize: 14,
+  },
+  totalAmount: {
+    color: "#10b981",
+    fontSize: 24,
+    fontWeight: "700",
+    marginTop: 4,
+  },
+  categoryBreakdown: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#374151",
+  },
+  categoryTitle: {
+    color: "#9ca3af",
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  categoryItem: {
+    color: "#e5e7eb",
+    fontSize: 14,
+    marginLeft: 8,
+    marginBottom: 4,
   },
   form: {
     marginBottom: 16,
